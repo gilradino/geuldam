@@ -598,8 +598,9 @@ function addSticker(opts){
   }
   else if(isText){
     st.color=opts.color||"#2a2a2a"; st.fontSize=opts.fontSize||20; st.fontFamily=opts.fontFamily||S.font; st.elKey=opts.elKey||null;
+    st.w=baseW; st.h=baseH;
     const al=opts.textAlign||"center";
-    el.innerHTML=`<div class="txt" style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;text-align:${al};font-family:${st.fontFamily};font-size:${st.fontSize}px;color:${st.color};line-height:1.4;padding:4px;word-break:break-word;white-space:pre-wrap">${esc(opts.content||"텍스트")}</div>`;
+    el.innerHTML=`<div class="txt" style="width:100%;height:100%;display:flex;align-items:flex-start;justify-content:center;text-align:${al};font-family:${st.fontFamily};font-size:${st.fontSize}px;color:${st.color};line-height:1.4;padding:4px;word-break:break-word;white-space:pre-wrap;overflow:hidden">${esc(opts.content||"텍스트")}</div>`;
   }
   el.innerHTML+=`<div class="handle del">✕</div><div class="handle scale">⤢</div><div class="handle rot">↻</div>`;
   canvas.appendChild(el);S.stickers.push(st);bindSticker(st);applyTransform(st);selectSticker(st);
@@ -641,8 +642,9 @@ function bindTextEdit(st){
   txt.addEventListener("keydown",e=>{ if(e.key==="Escape"){e.preventDefault();txt.blur();} });
 }
 function selectSticker(st){selected=st;$$(".sticker").forEach(x=>x.classList.remove("selected"));if(st)st.el.classList.add("selected");}
+function isBoxType(st){ return st.type==="imgbox"||st.type==="text"; }
 function applyTransform(st){
-  if(st.type==="imgbox"){
+  if(isBoxType(st)){
     const w=st.w||st.base, h=st.h||st.baseH;
     st.el.style.width=w+"px";st.el.style.height=h+"px";
     st.el.style.left=(st.x-w/2)+"px";st.el.style.top=(st.y-h/2)+"px";
@@ -676,7 +678,7 @@ function bindSticker(st){
     const move=ev=>{if(!ev.touches||ev.touches.length<2)return;ev.preventDefault();
       const nd=dist(ev.touches[0],ev.touches[1]),na=angle(ev.touches[0],ev.touches[1]);
       const ratio=nd/pinchStart.d;
-      if(st.type==="imgbox"){
+      if(isBoxType(st)){
         st.w=Math.max(30,(pinchStart.w||st.base)*ratio);
         st.h=Math.max(30,(pinchStart.h||st.baseH)*ratio);
       } else {
@@ -690,7 +692,7 @@ function bindSticker(st){
   el.querySelector(".del").addEventListener("click",ev=>{ev.stopPropagation();canvas.removeChild(el);S.stickers=S.stickers.filter(x=>x.id!==st.id);if(selected===st)selected=null;});
   el.querySelector(".del").addEventListener("touchstart",ev=>{ev.stopPropagation();ev.preventDefault();canvas.removeChild(el);S.stickers=S.stickers.filter(x=>x.id!==st.id);if(selected===st)selected=null;},{passive:false});
   bindHandle(el.querySelector(".scale"),p=>{
-    if(st.type==="imgbox"){
+    if(isBoxType(st)){
       // 핸들 위치를 박스 회전 기준 로컬 좌표로 변환 → 폭/높이를 따로 설정
       const dx=p.x-st.x, dy=p.y-st.y;
       const rad=-st.rot*Math.PI/180;
@@ -741,9 +743,11 @@ $("#freeAddBtns").querySelectorAll(".chip").forEach(c=>c.onclick=()=>{
   const e=S.el[kind];
   const sz=Math.round(S.size*(e?e.scale:1));
   const st=addSticker({type:"text",content:contentMap[kind]||"",color:(e&&e.color)||S.color,fontSize:sz,fontFamily:S.font,textAlign:(e&&e.align==="justify")?"left":(e&&e.align)||"left",elKey:kind});
-  // 본문은 넓게, 제목/소제목은 가로로 여유있게
-  if(kind==="body"){ st.base=300; st.baseH=200; st.el.style.width="300px"; st.el.style.height="200px"; }
-  else if(kind==="title"){ st.base=240; st.baseH=70; st.el.style.width="240px"; st.el.style.height="70px"; }
+  // 본문은 크게(세로로 넉넉히), 제목/소제목은 가로로 여유있게
+  if(kind==="body"){ st.w=360; st.h=420; st.base=360; st.baseH=420; }
+  else if(kind==="title"){ st.w=260; st.h=80; st.base=260; st.baseH=80; }
+  else if(kind==="sub"){ st.w=260; st.h=50; st.base=260; st.baseH=50; }
+  else if(kind==="caption"){ st.w=280; st.h=44; st.base=280; st.baseH=44; }
   applyTransform(st);
   render(); // 글 탭 내용/스타일 즉시 동기화
 });
@@ -825,8 +829,8 @@ function syncFreeformText(){
     txt.style.lineHeight=S.lh;
     txt.style.whiteSpace="pre-wrap";
     // 본문은 위→아래로 흐르게 상단 정렬, 짧은 요소는 가운데
-    txt.style.alignItems=(k==="body")?"flex-start":"center";
-    txt.style.justifyContent=(k==="body")?"flex-start":"center";
+    txt.style.alignItems="flex-start";
+    txt.style.justifyContent="flex-start";
     st.fontSize=px;
   });
 }
