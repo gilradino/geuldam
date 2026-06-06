@@ -593,6 +593,7 @@ function addSticker(opts){
   else if(opts.type==="image")el.innerHTML=`<img src="${opts.content}">`;
   else if(isImgBox){
     st.boxColor=opts.boxColor||"#e8c84a"; st.img=opts.img||null;
+    st.w=baseW; st.h=baseH;
     el.innerHTML=`<div class="imgbox" style="width:100%;height:100%;background:${st.img?`url(${st.img}) center/cover`:st.boxColor}"></div>`;
   }
   else if(isText){
@@ -640,7 +641,18 @@ function bindTextEdit(st){
   txt.addEventListener("keydown",e=>{ if(e.key==="Escape"){e.preventDefault();txt.blur();} });
 }
 function selectSticker(st){selected=st;$$(".sticker").forEach(x=>x.classList.remove("selected"));if(st)st.el.classList.add("selected");}
-function applyTransform(st){const bh=st.baseH||st.base;st.el.style.left=(st.x-st.base/2)+"px";st.el.style.top=(st.y-bh/2)+"px";st.el.style.transform=`scale(${st.scale}) rotate(${st.rot}deg)`;}
+function applyTransform(st){
+  if(st.type==="imgbox"){
+    const w=st.w||st.base, h=st.h||st.baseH;
+    st.el.style.width=w+"px";st.el.style.height=h+"px";
+    st.el.style.left=(st.x-w/2)+"px";st.el.style.top=(st.y-h/2)+"px";
+    st.el.style.transform=`rotate(${st.rot}deg)`;
+  } else {
+    const bh=st.baseH||st.base;
+    st.el.style.left=(st.x-st.base/2)+"px";st.el.style.top=(st.y-bh/2)+"px";
+    st.el.style.transform=`scale(${st.scale}) rotate(${st.rot}deg)`;
+  }
+}
 function getPoint(e){const t=e.touches?e.touches[0]:e;const r=canvas.getBoundingClientRect();return{x:t.clientX-r.left,y:t.clientY-r.top};}
 function dist(a,b){return Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY);}
 function angle(a,b){return Math.atan2(b.clientY-a.clientY,b.clientX-a.clientX)*180/Math.PI;}
@@ -660,17 +672,39 @@ function bindSticker(st){
   let pinchStart=null;
   function startPinch(e){
     selectSticker(st);
-    pinchStart={d:dist(e.touches[0],e.touches[1]),a:angle(e.touches[0],e.touches[1]),scale:st.scale,rot:st.rot};
+    pinchStart={d:dist(e.touches[0],e.touches[1]),a:angle(e.touches[0],e.touches[1]),scale:st.scale,rot:st.rot,w:st.w,h:st.h};
     const move=ev=>{if(!ev.touches||ev.touches.length<2)return;ev.preventDefault();
       const nd=dist(ev.touches[0],ev.touches[1]),na=angle(ev.touches[0],ev.touches[1]);
-      st.scale=Math.max(.2,Math.min(8,pinchStart.scale*(nd/pinchStart.d)));st.rot=pinchStart.rot+(na-pinchStart.a);applyTransform(st);};
+      const ratio=nd/pinchStart.d;
+      if(st.type==="imgbox"){
+        st.w=Math.max(30,(pinchStart.w||st.base)*ratio);
+        st.h=Math.max(30,(pinchStart.h||st.baseH)*ratio);
+      } else {
+        st.scale=Math.max(.2,Math.min(8,pinchStart.scale*ratio));
+      }
+      st.rot=pinchStart.rot+(na-pinchStart.a);applyTransform(st);};
     const up=()=>{document.removeEventListener("touchmove",move);document.removeEventListener("touchend",up);};
     document.addEventListener("touchmove",move,{passive:false});document.addEventListener("touchend",up);
   }
   el.addEventListener("mousedown",startDrag);el.addEventListener("touchstart",startDrag,{passive:false});
   el.querySelector(".del").addEventListener("click",ev=>{ev.stopPropagation();canvas.removeChild(el);S.stickers=S.stickers.filter(x=>x.id!==st.id);if(selected===st)selected=null;});
   el.querySelector(".del").addEventListener("touchstart",ev=>{ev.stopPropagation();ev.preventDefault();canvas.removeChild(el);S.stickers=S.stickers.filter(x=>x.id!==st.id);if(selected===st)selected=null;},{passive:false});
-  bindHandle(el.querySelector(".scale"),p=>{const d=Math.hypot(p.x-st.x,p.y-st.y);st.scale=Math.max(.2,Math.min(8,(d/(st.base*0.7))));applyTransform(st);},st);
+  bindHandle(el.querySelector(".scale"),p=>{
+    if(st.type==="imgbox"){
+      // 핸들 위치를 박스 회전 기준 로컬 좌표로 변환 → 폭/높이를 따로 설정
+      const dx=p.x-st.x, dy=p.y-st.y;
+      const rad=-st.rot*Math.PI/180;
+      const lx=dx*Math.cos(rad)-dy*Math.sin(rad);
+      const ly=dx*Math.sin(rad)+dy*Math.cos(rad);
+      st.w=Math.max(30, Math.abs(lx)*2);
+      st.h=Math.max(30, Math.abs(ly)*2);
+      applyTransform(st);
+    } else {
+      const d=Math.hypot(p.x-st.x,p.y-st.y);
+      st.scale=Math.max(.2,Math.min(8,(d/(st.base*0.7))));
+      applyTransform(st);
+    }
+  },st);
   bindHandle(el.querySelector(".rot"),p=>{st.rot=Math.atan2(p.y-st.y,p.x-st.x)*180/Math.PI+45;applyTransform(st);},st);
 }
 function bindHandle(handle,onMove,st){
