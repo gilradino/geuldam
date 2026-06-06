@@ -1,0 +1,932 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>글담 · 글을 이미지로</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Nanum+Myeongjo:wght@400;700;800&family=Gowun+Batang:wght@400;700&family=Gaegu:wght@400;700&family=Noto+Sans+KR:wght@400;500;700&family=Hahmlet:wght@400;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<style>
+  :root{
+    --bg:#0e0d12; --panel:#17151d; --panel-2:#1f1c28; --line:#2c2836;
+    --ink:#ECE7F2; --ink-dim:#9a93ac; --accent:#C9A86A; --accent-soft:#3a3346;
+    --font-ui:"Noto Sans KR",system-ui,sans-serif;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;padding:0;height:100%;}
+  body{
+    font-family:var(--font-ui);
+    background:radial-gradient(1200px 600px at 80% -10%, #221b2e 0%, transparent 60%),
+      radial-gradient(900px 500px at -10% 110%, #1a2230 0%, transparent 55%),var(--bg);
+    color:var(--ink);overflow:hidden;
+  }
+  .app{display:flex;flex-direction:column;height:100dvh;}
+  .topbar{display:flex;align-items:center;justify-content:space-between;padding:10px 16px;
+    border-bottom:1px solid var(--line);background:rgba(20,18,27,.7);backdrop-filter:blur(12px);z-index:30;flex:0 0 auto;}
+  .brand{display:flex;align-items:center;gap:10px;font-weight:800;letter-spacing:.5px;}
+  .brand .dot{width:11px;height:11px;border-radius:3px;background:var(--accent);box-shadow:0 0 14px var(--accent);}
+  .brand small{font-weight:500;color:var(--ink-dim);letter-spacing:0;font-size:11px;}
+  .btn{font-family:var(--font-ui);font-weight:700;border:none;cursor:pointer;border-radius:10px;padding:9px 14px;font-size:13px;transition:.15s;}
+  .btn-primary{background:var(--accent);color:#1c1505;}
+  .btn-primary:hover{filter:brightness(1.08);} .btn-primary:active{transform:translateY(1px);}
+  .btn-ghost{background:var(--panel-2);color:var(--ink);border:1px solid var(--line);}
+  .btn-ghost:hover{border-color:var(--accent-soft);}
+  .stage-wrap{flex:1 1 auto;min-height:0;display:flex;align-items:center;justify-content:center;padding:18px;overflow:auto;position:relative;}
+  #canvas{position:relative;overflow:hidden;background:#222;border-radius:4px;
+    box-shadow:0 30px 80px rgba(0,0,0,.55),0 0 0 1px rgba(255,255,255,.04);flex:0 0 auto;}
+  #bgLayer{position:absolute;inset:0;background-size:cover;background-position:center;}
+  #lineLayer{position:absolute;inset:0;pointer-events:none;display:none;}
+  /* ===== doc layout layers ===== */
+  #imgSlot{position:absolute;background-size:cover;background-position:center;display:none;}
+  #docLayer{position:absolute;inset:0;display:none;flex-direction:column;}
+  .doc-title{margin:0;font-weight:800;line-height:1.2;}
+  .doc-sub{margin:0;opacity:.72;font-weight:400;}
+  .doc-body{white-space:pre-wrap;word-break:break-word;}
+  .doc-caption{text-align:center;opacity:.85;}
+  .dialog-row{display:flex;gap:14px;align-items:baseline;}
+  .dialog-name{flex:0 0 auto;font-weight:700;text-align:right;}
+  .dialog-line{flex:1;}
+  /* free text layer */
+  #textLayer{position:absolute;inset:0;display:flex;pointer-events:none;}
+  #textBox{pointer-events:none;white-space:pre-wrap;word-break:break-word;width:100%;}
+  /* stickers */
+  .sticker{position:absolute;cursor:grab;touch-action:none;user-select:none;will-change:transform;transform-origin:center center;z-index:5;}
+  .sticker.selected{outline:1.5px dashed var(--accent);outline-offset:4px;}
+  .sticker img{display:block;width:100%;height:100%;pointer-events:none;}
+  .sticker .emoji{display:flex;align-items:center;justify-content:center;line-height:1;}
+  .sticker .shape{width:100%;height:100%;}
+  .sticker .imgbox{border-radius:2px;background-size:cover;background-position:center;}
+  .sticker .txt{overflow:hidden;}
+  .handle{position:absolute;width:26px;height:26px;border-radius:50%;background:var(--accent);border:2px solid #1c1505;
+    display:none;align-items:center;justify-content:center;cursor:pointer;touch-action:none;font-size:13px;color:#1c1505;box-shadow:0 2px 8px rgba(0,0,0,.4);}
+  .sticker.selected .handle{display:flex;}
+  .handle.del{top:-13px;left:-13px;} .handle.scale{bottom:-13px;right:-13px;cursor:nwse-resize;} .handle.rot{top:-13px;right:-13px;cursor:grab;}
+  /* panel */
+  .panel{flex:0 0 auto;background:var(--panel);border-top:1px solid var(--line);z-index:20;display:flex;flex-direction:column;}
+  .tabs{display:flex;border-bottom:1px solid var(--line);overflow-x:auto;scrollbar-width:none;}
+  .tabs::-webkit-scrollbar{display:none;}
+  .tab{flex:1 0 auto;padding:12px 16px;text-align:center;font-size:13px;font-weight:700;color:var(--ink-dim);cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;}
+  .tab.active{color:var(--accent);border-bottom-color:var(--accent);}
+  .tab-body{padding:14px 16px 18px;max-height:40dvh;overflow-y:auto;}
+  .tab-pane{display:none;} .tab-pane.active{display:block;}
+  .row{display:flex;align-items:center;gap:10px;margin:11px 0;flex-wrap:wrap;}
+  .row label{font-size:12px;color:var(--ink-dim);min-width:54px;font-weight:600;}
+  textarea,input[type=text],input[type=number],select{font-family:var(--font-ui);background:var(--panel-2);color:var(--ink);
+    border:1px solid var(--line);border-radius:9px;padding:10px;font-size:14px;width:100%;}
+  textarea{min-height:96px;resize:vertical;line-height:1.5;}
+  textarea.long{min-height:200px;}
+  input[type=number]{width:84px;} input[type=range]{flex:1;accent-color:var(--accent);}
+  input[type=color]{width:40px;height:34px;border:1px solid var(--line);border-radius:8px;background:none;padding:2px;cursor:pointer;}
+  .val{font-size:12px;color:var(--ink-dim);min-width:40px;text-align:right;}
+  .chips{display:flex;gap:8px;flex-wrap:wrap;}
+  .chip{padding:8px 13px;border-radius:20px;border:1px solid var(--line);background:var(--panel-2);color:var(--ink);font-size:12.5px;font-weight:600;cursor:pointer;transition:.12s;}
+  .chip.active{background:var(--accent);color:#1c1505;border-color:var(--accent);}
+  .chip:active{transform:scale(.96);}
+  .swatches{display:grid;grid-template-columns:repeat(auto-fill,minmax(58px,1fr));gap:9px;}
+  .sw{aspect-ratio:1;border-radius:10px;cursor:pointer;border:2px solid transparent;background-size:cover;background-position:center;position:relative;overflow:hidden;display:flex;align-items:flex-end;}
+  .sw.active{border-color:var(--accent);}
+  .sw span{font-size:9px;font-weight:700;padding:3px 5px;background:rgba(0,0,0,.45);color:#fff;width:100%;}
+  .layouts{display:grid;grid-template-columns:repeat(auto-fill,minmax(82px,1fr));gap:10px;}
+  .lay{border:1.5px solid var(--line);border-radius:10px;cursor:pointer;background:var(--panel-2);padding:0;overflow:hidden;transition:.12s;}
+  .lay.active{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent);}
+  .lay .thumb{height:64px;position:relative;background:linear-gradient(135deg,#3a4252,#262b38);}
+  .lay .thumb i{position:absolute;background:rgba(255,255,255,.78);border-radius:1px;display:block;}
+  .lay .thumb .imgz{position:absolute;background:rgba(168,140,160,.9);border-radius:1px;}
+  .lay p{margin:0;padding:5px 6px;font-size:11px;font-weight:700;color:var(--ink-dim);text-align:center;}
+  .emoji-grid{display:flex;flex-wrap:wrap;gap:4px;}
+  .emoji-grid button{font-size:22px;background:none;border:none;cursor:pointer;padding:5px;border-radius:8px;}
+  .emoji-grid button:hover{background:var(--panel-2);}
+  .shape-grid{display:flex;gap:10px;flex-wrap:wrap;}
+  .shape-grid button{width:48px;height:48px;border-radius:10px;border:1px solid var(--line);background:var(--panel-2);cursor:pointer;display:flex;align-items:center;justify-content:center;}
+  .hint{font-size:11.5px;color:var(--ink-dim);line-height:1.6;margin:6px 0 0;}
+  .hide-input{display:none;}
+  .seg{display:flex;gap:0;border:1px solid var(--line);border-radius:9px;overflow:hidden;}
+  .seg button{flex:1;padding:9px;background:var(--panel-2);border:none;color:var(--ink-dim);font-weight:700;font-size:13px;cursor:pointer;}
+  .seg button.active{background:var(--accent);color:#1c1505;}
+  .group-title{font-size:11px;font-weight:800;letter-spacing:1px;color:var(--accent);margin:16px 0 6px;text-transform:uppercase;opacity:.85;}
+  .only-doc{display:none;} .mode-doc .only-doc{display:block;}
+  .only-free{display:block;} .mode-doc .only-free{display:none;}
+  @media(min-width:860px){
+    .app{flex-direction:row;}
+    .panel{order:-1;width:380px;border-top:none;border-right:1px solid var(--line);}
+    .tab-body{max-height:none;flex:1;}
+    .topbar{position:fixed;top:0;left:0;right:0;}
+    .stage-wrap{padding-top:70px;}
+    .panel{padding-top:54px;}
+  }
+</style>
+</head>
+<body>
+<div class="app" id="appRoot">
+  <div class="topbar">
+    <div class="brand"><span class="dot"></span>글담<small>글을 이미지로</small></div>
+    <button class="btn btn-primary" id="downloadBtn">이미지 저장</button>
+  </div>
+
+  <div class="stage-wrap" id="stageWrap">
+    <div id="canvas">
+      <div id="bgLayer"></div>
+      <canvas id="lineLayer"></canvas>
+      <div id="imgSlot"></div>
+      <div id="docLayer"></div>
+      <div id="textLayer"><div id="textBox"></div></div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="tabs">
+      <div class="tab active" data-tab="text">글</div>
+      <div class="tab" data-tab="layout">레이아웃</div>
+      <div class="tab" data-tab="bg">배경·이미지</div>
+      <div class="tab" data-tab="sticker">꾸밈</div>
+      <div class="tab" data-tab="size">크기</div>
+    </div>
+    <div class="tab-body">
+
+      <!-- TEXT -->
+      <div class="tab-pane active" data-pane="text">
+        <div class="only-doc">
+          <div class="row"><label>제목</label><input type="text" id="docTitle" placeholder="제목" value="제목"></div>
+          <div class="row"><label>부제</label><input type="text" id="docSub" placeholder="제목 아래 작은 설명" value="소제목을 작성합니다."></div>
+        </div>
+        <div class="row"><label class="only-doc" style="min-width:auto">본문</label></div>
+        <textarea id="textInput" class="long" placeholder="여기에 글을 적으세요.&#10;줄을 바꾸면 그대로 반영돼요.">별을 헤고 활자를 직조하는 공상가들에게 조금이나마 보탬이 되기를 바랍니다. 행복하세요.</textarea>
+        <div class="only-doc">
+          <div class="row"><label>캡션</label><input type="text" id="docCaption" placeholder="맨 아래 작은 글 (페이지·출처 등)" value="페이지나 출처를 적습니다."></div>
+        </div>
+        <div class="group-title">서식</div>
+        <div class="row">
+          <label>폰트</label>
+          <div class="chips" id="fontChips">
+            <div class="chip active" data-font="'Nanum Myeongjo',serif">명조</div>
+            <div class="chip" data-font="'Gowun Batang',serif">고운바탕</div>
+            <div class="chip" data-font="'Hahmlet',serif">함렛</div>
+            <div class="chip" data-font="'Gaegu',cursive">손글씨</div>
+            <div class="chip" data-font="'Noto Sans KR',sans-serif">고딕</div>
+          </div>
+        </div>
+        <div class="row"><label>크기</label><input type="range" id="fontSize" min="10" max="60" value="15"><span class="val" id="fontSizeVal">15</span></div>
+        <div class="row"><label>줄간격</label><input type="range" id="lineHeight" min="100" max="260" value="175"><span class="val" id="lineHeightVal">1.75</span></div>
+        <div class="row"><label>자간</label><input type="range" id="letterSpacing" min="-2" max="8" value="0"><span class="val" id="letterSpacingVal">0</span></div>
+        <div class="row"><label>색상</label><input type="color" id="textColor" value="#2a2a2a">
+          <div class="chips only-free" id="alignChips" style="margin-left:auto">
+            <div class="chip active" data-align="left">왼쪽</div>
+            <div class="chip" data-align="center">가운데</div>
+            <div class="chip" data-align="right">오른쪽</div>
+          </div>
+        </div>
+        <div class="only-free">
+          <div class="row"><label>방향</label>
+            <div class="seg" id="writingSeg" style="max-width:200px">
+              <button class="active" data-mode="horizontal">가로쓰기</button>
+              <button data-mode="vertical">세로쓰기</button>
+            </div>
+          </div>
+          <div class="row"><label>글상자 폭</label><input type="range" id="boxWidth" min="50" max="100" value="82"><span class="val" id="boxWidthVal">82%</span></div>
+        </div>
+      </div>
+
+      <!-- LAYOUT -->
+      <div class="tab-pane" data-pane="layout">
+        <div class="seg" id="modeSeg">
+          <button class="active" data-mode="free">자유 배치</button>
+          <button data-mode="doc">문서형</button>
+        </div>
+        <div class="only-free">
+          <p class="hint">글이 들어갈 위치를 골라보세요. 손으로 옮길 필요 없이 자동 정렬돼요.</p>
+          <div class="layouts" id="layoutGrid"></div>
+          <div class="row" style="margin-top:14px"><label>여백</label><input type="range" id="padding" min="3" max="22" value="9"><span class="val" id="paddingVal">9%</span></div>
+          <div class="row"><label>글 배경</label>
+            <div class="seg" id="textBgSeg" style="max-width:240px">
+              <button class="active" data-bg="none">없음</button>
+              <button data-bg="card">흰 카드</button>
+              <button data-bg="dim">반투명</button>
+            </div>
+          </div>
+          <div id="dimOpts" style="display:none">
+            <div class="row"><label>배경 색</label><input type="color" id="textBgColor" value="#000000"></div>
+            <div class="row"><label>투명도</label><input type="range" id="textBgOpacity" min="0" max="100" value="32"><span class="val" id="textBgOpacityVal">32%</span></div>
+          </div>
+        </div>
+        <div class="only-doc">
+          <p class="hint">제목·본문·캡션이 짜인 틀에 자동으로 배치돼요. 색상 칸은 이미지 영역이에요 — '배경·이미지' 탭에서 색이나 사진을 채우세요.</p>
+          <div class="layouts" id="docLayoutGrid"></div>
+          <div id="fixedDocOpts">
+            <div class="row" style="margin-top:14px"><label>이미지 영역</label><input type="color" id="slotColor" value="#e8c84a"></div>
+            <div class="row" style="flex-wrap:nowrap;gap:8px">
+              <button class="btn btn-ghost" id="slotUploadBtn" style="flex:1">이 영역에 사진 넣기</button>
+              <button class="btn btn-ghost" id="slotClearBtn" style="flex:1">사진 빼고 색으로</button>
+            </div>
+            <input type="file" id="slotUpload" accept="image/*" class="hide-input">
+            <p class="hint">사진을 넣은 뒤, 이미지 영역을 <b>드래그</b>하면 보여줄 부분을 위·아래·좌·우로 조절할 수 있어요.</p>
+            <div class="row"><label>본문 폭</label><input type="range" id="docBodyW" min="60" max="100" value="92"><span class="val" id="docBodyWVal">92%</span></div>
+          </div>
+          <div id="freeformOpts" style="display:none">
+            <div class="group-title">자유 배치 요소 추가</div>
+            <p class="hint">버튼을 누르면 캔버스에 요소가 생겨요. 각 요소를 드래그해 옮기고, 모서리 핸들(또는 두 손가락)로 크기·회전을 조절하세요. <b>글 내용은 '글' 탭에서 수정하면 자동으로 반영</b>돼요. 글자 크기·색·정렬은 '글' 탭과 아래 '요소별 세부 설정'을 따릅니다.</p>
+            <div class="chips" id="freeAddBtns" style="gap:8px">
+              <div class="chip" data-add="title">＋ 제목</div>
+              <div class="chip" data-add="sub">＋ 소제목</div>
+              <div class="chip" data-add="body">＋ 본문</div>
+              <div class="chip" data-add="caption">＋ 페이지·출처</div>
+              <div class="chip" data-add="imgbox">＋ 이미지 박스</div>
+            </div>
+            <p class="hint" style="margin-top:10px">이미지 박스를 <b>탭해서 선택한 뒤</b> 아래 버튼으로 사진을 넣거나 색을 바꿀 수 있어요.</p>
+            <div class="row" style="flex-wrap:nowrap">
+              <button class="btn btn-ghost" id="boxImgBtn" style="flex:1">📷 선택한 박스에 사진 넣기</button>
+            </div>
+            <div class="row" style="flex-wrap:nowrap">
+              <label style="min-width:auto">박스 색</label>
+              <input type="color" id="boxColor" value="#e8c84a" style="width:48px;height:36px">
+              <span class="hint" style="margin:0">사진 대신 단색으로</span>
+              <input type="file" id="boxImgUpload" accept="image/*" class="hide-input">
+            </div>
+          </div>
+          <div class="group-title">요소별 세부 설정</div>
+          <p class="hint">기본 크기는 '글' 탭의 크기 슬라이더로 한꺼번에 조절돼요. 여기서는 요소별로 배수·자간·색상·정렬을 미세조정합니다. (자유 배치에서는 제목/소제목/본문/페이지 텍스트의 글자 스타일에도 적용돼요)</p>
+          <div id="elementControls"></div>
+        </div>
+      </div>
+
+      <!-- BG / IMAGE -->
+      <div class="tab-pane" data-pane="bg">
+        <div class="group-title">바탕</div>
+        <div class="swatches" id="bgSwatches"></div>
+        <div class="row" style="margin-top:14px">
+          <button class="btn btn-ghost" id="bgUploadBtn" style="width:100%">바탕 이미지 업로드</button>
+          <input type="file" id="bgUpload" accept="image/*" class="hide-input">
+        </div>
+        <div class="row"><label>밝기</label><input type="range" id="bgBright" min="30" max="130" value="100"><span class="val" id="bgBrightVal">100%</span></div>
+        <div class="row"><label>흐림</label><input type="range" id="bgBlur" min="0" max="12" value="0"><span class="val" id="bgBlurVal">0</span></div>
+        <p class="hint">바탕 출처(Unsplash, Pixabay 등)는 글이나 캡션에 직접 적어 표기하면 돼요. 문서형의 이미지 영역(색 네모)에 사진을 넣는 건 '레이아웃' 탭에서 할 수 있어요.</p>
+      </div>
+
+      <!-- STICKER -->
+      <div class="tab-pane" data-pane="sticker">
+        <p class="hint">탭하면 추가돼요. 손가락(마우스)으로 옮기고, 모서리 핸들로 크기·회전을 조절하세요. 모바일에선 두 손가락 핀치로도 됩니다.</p>
+        <div class="row"><label style="min-width:auto">이모지</label></div>
+        <div class="emoji-grid" id="emojiGrid"></div>
+        <div class="row" style="margin-top:8px"><label style="min-width:auto">도형</label></div>
+        <div class="shape-grid" id="shapeGrid"></div>
+        <div class="row" style="margin-top:12px">
+          <button class="btn btn-ghost" id="addTextBox" style="width:100%">＋ 텍스트 박스 추가</button>
+        </div>
+        <p class="hint">텍스트 박스는 자유롭게 옮기고 회전·확대할 수 있어요. 추가 후 박스를 더블클릭(모바일은 두 번 탭)하면 글자를 고칠 수 있어요.</p>
+        <div class="row" style="margin-top:12px">
+          <button class="btn btn-ghost" id="imgUploadBtn" style="width:100%">이미지 업로드해서 붙이기</button>
+          <input type="file" id="imgUpload" accept="image/*" class="hide-input">
+        </div>
+        <button class="btn btn-ghost" id="clearStickers" style="width:100%;margin-top:8px">꾸밈 전체 지우기</button>
+      </div>
+
+      <!-- SIZE -->
+      <div class="tab-pane" data-pane="size">
+        <p class="hint">원하는 가로·세로 비율을 정하세요.</p>
+        <div class="chips" id="ratioChips">
+          <div class="chip" data-w="1" data-h="1">정사각 1:1</div>
+          <div class="chip" data-w="4" data-h="5">세로 4:5</div>
+          <div class="chip" data-w="9" data-h="16">스토리 9:16</div>
+          <div class="chip" data-w="3" data-h="4">3:4</div>
+          <div class="chip" data-w="16" data-h="9">가로 16:9</div>
+          <div class="chip active" data-w="210" data-h="297">A4</div>
+        </div>
+        <div class="row" style="margin-top:14px">
+          <label>비율</label>
+          <input type="number" id="ratioW" min="1" max="9999" value="210"> :
+          <input type="number" id="ratioH" min="1" max="9999" value="297">
+        </div>
+        <div class="row"><label>저장 형식</label>
+          <div class="seg" id="formatSeg" style="max-width:240px">
+            <button class="active" data-fmt="png">PNG</button>
+            <button data-fmt="jpg">JPG</button>
+          </div>
+        </div>
+        <div class="row"><label>저장 크기</label>
+          <select id="scaleSel">
+            <option value="1080">가로 1080px (SNS 표준)</option>
+            <option value="1440" selected>가로 1440px (고화질)</option>
+            <option value="2160">가로 2160px (최고화질)</option>
+            <option value="2480">A4 인쇄급 (300dpi)</option>
+          </select>
+        </div>
+        <p class="hint">저장 크기는 미리보기 창 크기와 상관없이 항상 일정해요. 화면이 작든 크든 같은 고화질로 저장됩니다. JPG는 품질 최대(100%)로 저장돼 눈에 띄는 저하가 거의 없어요.</p>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+/* ============ STATE ============ */
+const S = {
+  mode:"free",
+  text:"", title:"제목", sub:"소제목을 작성합니다.", caption:"페이지나 출처를 적습니다.",
+  font:"'Nanum Myeongjo',serif", size:15, lh:1.75, ls:0, color:"#2a2a2a",
+  align:"left", writing:"horizontal", boxW:82,
+  layout:"top", docLayout:"banner", padding:9, textBg:"none",
+  textBgColor:"#000000", textBgOpacity:32,
+  docBodyW:92, slotColor:"#e8c84a", slotImg:null, slotPosX:50, slotPosY:50,
+  // 문서형 요소별 세부 설정 (scale=본문크기 배수, align=정렬, color=null이면 공통색, ls=자간px)
+  el:{
+    title:{scale:2.4, align:"right", color:null, ls:0},
+    sub:{scale:0.85, align:"right", color:null, ls:0},
+    body:{scale:1.0, align:"justify", color:null, ls:0},
+    caption:{scale:0.78, align:"center", color:null, ls:0},
+  },
+  bg:{type:"solid", value:"#ffffff"}, bright:100, blur:0,
+  ratioW:210, ratioH:297, exportW:1440, format:"png", stickers:[]
+};
+const $=s=>document.querySelector(s), $$=s=>document.querySelectorAll(s);
+const canvas=$("#canvas"),bgLayer=$("#bgLayer"),textLayer=$("#textLayer"),textBox=$("#textBox"),
+  lineCanvas=$("#lineLayer"),stageWrap=$("#stageWrap"),docLayer=$("#docLayer"),imgSlot=$("#imgSlot"),appRoot=$("#appRoot");
+
+/* ============ PRESETS ============ */
+const BG_PRESETS=[
+  {name:"흰색",type:"solid",value:"#ffffff"},
+  {name:"크림",type:"solid",value:"#f4efe6"},
+  {name:"먹빛",type:"solid",value:"#1a1820"},
+  {name:"설산",type:"gradient",value:"linear-gradient(170deg,#9fb3cc,#c4d2e2 45%,#e9eef4)"},
+  {name:"새벽",type:"gradient",value:"linear-gradient(160deg,#5b6b8c,#9aa9c2 60%,#dfe5ee)"},
+  {name:"노을",type:"gradient",value:"linear-gradient(160deg,#e8a37a,#d97e6a 45%,#7a5a78)"},
+  {name:"모래",type:"gradient",value:"linear-gradient(180deg,#cdd6e0,#e7ddcf 55%,#cdb79c)"},
+  {name:"숲",type:"gradient",value:"linear-gradient(160deg,#3a5046,#6b8273 55%,#cdd8c9)"},
+  {name:"라벤더",type:"gradient",value:"linear-gradient(160deg,#b6a7d4,#d9cfe8 60%,#f1ecf6)"},
+  {name:"종이",type:"paper",value:"#f6f1e7"},
+  {name:"노트",type:"lined",value:"#fcfbf7"},
+  {name:"미드나잇",type:"solid",value:"#13121a"},
+];
+const LAYOUTS=[
+  {id:"top",name:"상단",justify:"flex-start",align:"flex-start"},
+  {id:"center",name:"중앙",justify:"center",align:"center"},
+  {id:"bottom",name:"하단",justify:"flex-end",align:"flex-start"},
+  {id:"upper",name:"상단중앙",justify:"flex-start",align:"center"},
+  {id:"lower",name:"하단중앙",justify:"flex-end",align:"center"},
+  {id:"mid",name:"수직중앙",justify:"center",align:"flex-start"},
+];
+// doc layouts: thumbnail described by image-zone rect (in %) + a flag
+const DOC_LAYOUTS=[
+  {id:"banner",name:"상단 배너", img:{top:0,left:0,w:100,h:30}},
+  {id:"sidebar",name:"좌측 세로바", img:{top:0,left:0,w:26,h:100}},
+  {id:"sidebarR",name:"우측 세로바", img:{top:0,left:74,w:26,h:100}},
+  {id:"bodybox",name:"본문 박스", img:{top:32,left:6,w:88,h:60}},
+  {id:"bottomBanner",name:"하단 배너", img:{top:70,left:0,w:100,h:30}},
+  {id:"freeform",name:"✦ 자유 배치", img:null},
+];
+const EMOJIS=["✨","🌙","⭐","❄️","🌸","🍂","🌿","🕊️","☁️","🌊","🔥","💫","🌼","🍃","☕","📖","✏️","🎐","🫧","🪶","💗","🖤","🤍","🌷","🍁","⛰️","🌌","💎"];
+
+/* ============ BUILD UI ============ */
+function buildBgSwatches(){
+  const c=$("#bgSwatches");
+  BG_PRESETS.forEach((b,i)=>{
+    const d=document.createElement("div");d.className="sw";
+    d.style.background=b.value;d.innerHTML=`<span>${b.name}</span>`;
+    if(b.type==="solid"&&b.value==="#ffffff")d.classList.add("active");
+    d.onclick=()=>{S.bg={...b};S.blur=0;$("#bgBlur").value=0;$("#bgBlurVal").textContent=0;
+      $$("#bgSwatches .sw").forEach(x=>x.classList.remove("active"));d.classList.add("active");render();};
+    c.appendChild(d);
+  });
+}
+function buildLayouts(){
+  const g=$("#layoutGrid");
+  LAYOUTS.forEach(l=>{
+    const d=document.createElement("div");d.className="lay"+(l.id===S.layout?" active":"");
+    const posMap={"flex-start":"top:10%","center":"top:38%","flex-end":"bottom:12%"};
+    const alignMap={"flex-start":"left:12%;width:55%","center":"left:18%;width:64%","flex-end":"right:12%;width:55%"};
+    const vy=posMap[l.justify],hx=alignMap[l.align];
+    d.innerHTML=`<div class="thumb">
+      <i style="${vy};${hx};height:6px"></i>
+      <i style="${vy.replace(/(\d+)%/,(m,n)=>(+n+13)+'%')};${hx};height:6px;opacity:.7"></i>
+      <i style="${vy.replace(/(\d+)%/,(m,n)=>(+n+26)+'%')};${hx};height:6px;opacity:.5"></i>
+    </div><p>${l.name}</p>`;
+    d.onclick=()=>{S.layout=l.id;$$("#layoutGrid .lay").forEach(x=>x.classList.remove("active"));d.classList.add("active");render();};
+    g.appendChild(d);
+  });
+}
+function buildDocLayouts(){
+  const g=$("#docLayoutGrid");
+  DOC_LAYOUTS.forEach(l=>{
+    const d=document.createElement("div");d.className="lay"+(l.id===S.docLayout?" active":"");
+    if(!l.img){
+      // freeform thumbnail: scattered movable bits
+      d.innerHTML=`<div class="thumb">
+        <div class="imgz" style="top:18%;left:14%;width:32%;height:40%;transform:rotate(-6deg)"></div>
+        <i style="top:24%;left:54%;width:34%;height:6px;transform:rotate(4deg)"></i>
+        <i style="top:62%;left:20%;width:55%;height:5px;opacity:.8"></i>
+        <i style="top:74%;left:30%;width:40%;height:5px;opacity:.6;transform:rotate(-3deg)"></i>
+      </div><p>${l.name}</p>`;
+    } else {
+      const im=l.img;let lines="";
+      const isSide=(l.id==="sidebar");
+      const bx=isSide?34:14;
+      const bw=(l.id==="sidebar"||l.id==="sidebarR")?52:70;
+      const by=(l.id==="banner")?42:(l.id==="bodybox"?40:(l.id==="bottomBanner"?14:30));
+      for(let k=0;k<3;k++) lines+=`<i style="top:${by+k*12}%;left:${bx}%;width:${bw}%;height:5px;opacity:${1-k*0.2}"></i>`;
+      d.innerHTML=`<div class="thumb">
+        <div class="imgz" style="top:${im.top}%;left:${im.left}%;width:${im.w}%;height:${im.h}%"></div>
+        ${lines}</div><p>${l.name}</p>`;
+    }
+    d.onclick=()=>{
+      S.docLayout=l.id;$$("#docLayoutGrid .lay").forEach(x=>x.classList.remove("active"));d.classList.add("active");
+      const isFree=(l.id==="freeform");
+      $("#fixedDocOpts").style.display=isFree?"none":"block";
+      $("#freeformOpts").style.display=isFree?"block":"none";
+      render();
+    };
+    g.appendChild(d);
+  });
+}
+function buildEmojis(){const g=$("#emojiGrid");EMOJIS.forEach(e=>{const b=document.createElement("button");b.textContent=e;b.onclick=()=>addSticker({type:"emoji",content:e});g.appendChild(b);});}
+function buildShapes(){
+  const g=$("#shapeGrid");
+  const shapes=[
+    `<circle cx="24" cy="24" r="20" fill="#C9A86A"/>`,
+    `<rect x="6" y="6" width="36" height="36" rx="6" fill="#7a8a72"/>`,
+    `<path d="M24 4 L44 44 L4 44 Z" fill="#d97e6a"/>`,
+    `<path d="M24 6 C30 18 42 18 42 28 C42 38 24 44 24 44 C24 44 6 38 6 28 C6 18 18 18 24 6 Z" fill="#cf6f86"/>`,
+    `<path d="M24 4 L29 18 L44 18 L32 28 L37 43 L24 34 L11 43 L16 28 L4 18 L19 18 Z" fill="#C9A86A"/>`,
+    `<rect x="4" y="22" width="40" height="4" rx="2" fill="#3a3a3a"/>`,
+  ];
+  shapes.forEach(svg=>{const b=document.createElement("button");
+    b.innerHTML=`<svg width="34" height="34" viewBox="0 0 48 48">${svg}</svg>`;
+    b.onclick=()=>addSticker({type:"shape",content:`<svg width="100%" height="100%" viewBox="0 0 48 48" preserveAspectRatio="none">${svg}</svg>`});
+    g.appendChild(b);});
+}
+function buildElementControls(){
+  const c=$("#elementControls");c.innerHTML="";
+  const items=[
+    {key:"title",label:"제목",hasAlign:true,min:1,max:4,step:0.1},
+    {key:"sub",label:"소제목",hasAlign:true,min:0.4,max:2,step:0.05},
+    {key:"body",label:"본문",hasAlign:"justify",min:0.6,max:2,step:0.05},
+    {key:"caption",label:"캡션",hasAlign:true,min:0.4,max:1.5,step:0.05},
+  ];
+  items.forEach(it=>{
+    const e=S.el[it.key];
+    const wrap=document.createElement("div");
+    wrap.style.cssText="border:1px solid var(--line);border-radius:10px;padding:8px 10px;margin:8px 0;";
+    const alignBtns = it.hasAlign==="justify"
+      ? `<button data-a="left">왼쪽</button><button data-a="center">가운데</button><button data-a="right">오른쪽</button><button data-a="justify">양쪽</button>`
+      : `<button data-a="left">왼쪽</button><button data-a="center">가운데</button><button data-a="right">오른쪽</button>`;
+    wrap.innerHTML=`
+      <div style="font-size:12px;font-weight:700;color:var(--ink);margin-bottom:6px">${it.label}</div>
+      <div class="row" style="margin:6px 0"><label>배율</label><input type="range" class="el-scale" data-k="${it.key}" min="${it.min}" max="${it.max}" step="${it.step}" value="${e.scale}"><span class="val el-scale-val">${e.scale.toFixed(2)}×</span></div>
+      <div class="row" style="margin:6px 0"><label>자간</label><input type="range" class="el-ls" data-k="${it.key}" min="-2" max="10" step="0.5" value="${e.ls||0}"><span class="val el-ls-val">${e.ls||0}</span></div>
+      <div class="row" style="margin:6px 0"><label>색상</label>
+        <label style="font-size:12px;color:var(--ink-dim);display:flex;align-items:center;gap:5px;cursor:pointer"><input type="checkbox" class="el-colchk" data-k="${it.key}" ${e.color?"checked":""}>직접 지정</label>
+        <input type="color" class="el-col" data-k="${it.key}" value="${e.color||S.color}" style="${e.color?"":"opacity:.35;pointer-events:none"}">
+      </div>
+      <div class="seg el-align" data-k="${it.key}" style="margin-top:4px">${alignBtns}</div>`;
+    c.appendChild(wrap);
+    // bind scale
+    const sl=wrap.querySelector(".el-scale"),sv=wrap.querySelector(".el-scale-val");
+    sl.addEventListener("input",ev=>{S.el[it.key].scale=+ev.target.value;sv.textContent=(+ev.target.value).toFixed(2)+"×";render();});
+    // bind letter-spacing
+    const lsl=wrap.querySelector(".el-ls"),lsv=wrap.querySelector(".el-ls-val");
+    lsl.addEventListener("input",ev=>{S.el[it.key].ls=+ev.target.value;lsv.textContent=ev.target.value;render();});
+    // bind color
+    const chk=wrap.querySelector(".el-colchk"),colInput=wrap.querySelector(".el-col");
+    chk.addEventListener("change",ev=>{
+      if(ev.target.checked){S.el[it.key].color=colInput.value;colInput.style.opacity="1";colInput.style.pointerEvents="auto";}
+      else{S.el[it.key].color=null;colInput.style.opacity=".35";colInput.style.pointerEvents="none";}
+      render();
+    });
+    colInput.addEventListener("input",ev=>{if(chk.checked){S.el[it.key].color=ev.target.value;render();}});
+    // bind align
+    wrap.querySelectorAll(".el-align button").forEach(b=>{
+      if(b.dataset.a===e.align)b.classList.add("active");
+      b.onclick=()=>{S.el[it.key].align=b.dataset.a;wrap.querySelectorAll(".el-align button").forEach(x=>x.classList.remove("active"));b.classList.add("active");render();};
+    });
+  });
+}
+
+/* ============ TABS ============ */
+$$(".tab").forEach(t=>t.onclick=()=>{
+  $$(".tab").forEach(x=>x.classList.remove("active"));$$(".tab-pane").forEach(x=>x.classList.remove("active"));
+  t.classList.add("active");$(`.tab-pane[data-pane="${t.dataset.tab}"]`).classList.add("active");
+});
+
+/* ============ MODE ============ */
+$("#modeSeg").querySelectorAll("button").forEach(b=>b.onclick=()=>{
+  S.mode=b.dataset.mode;$$("#modeSeg button").forEach(x=>x.classList.remove("active"));b.classList.add("active");
+  appRoot.classList.toggle("mode-doc",S.mode==="doc");
+  if(S.mode==="doc"){S.bg={type:"solid",value:"#ffffff"};$$("#bgSwatches .sw").forEach(x=>x.classList.remove("active"));$$("#bgSwatches .sw")[0]?.classList.add("active");}
+  render();
+});
+
+/* ============ TEXT CONTROLS ============ */
+$("#textInput").addEventListener("input",e=>{S.text=e.target.value;render();});
+$("#docTitle").addEventListener("input",e=>{S.title=e.target.value;render();});
+$("#docSub").addEventListener("input",e=>{S.sub=e.target.value;render();});
+$("#docCaption").addEventListener("input",e=>{S.caption=e.target.value;render();});
+$("#fontChips").querySelectorAll(".chip").forEach(c=>c.onclick=()=>{S.font=c.dataset.font;$$("#fontChips .chip").forEach(x=>x.classList.remove("active"));c.classList.add("active");render();});
+$("#alignChips").querySelectorAll(".chip").forEach(c=>c.onclick=()=>{S.align=c.dataset.align;$$("#alignChips .chip").forEach(x=>x.classList.remove("active"));c.classList.add("active");render();});
+$("#fontSize").addEventListener("input",e=>{S.size=+e.target.value;$("#fontSizeVal").textContent=e.target.value;render();});
+$("#lineHeight").addEventListener("input",e=>{S.lh=e.target.value/100;$("#lineHeightVal").textContent=S.lh.toFixed(2);render();});
+$("#letterSpacing").addEventListener("input",e=>{S.ls=+e.target.value;$("#letterSpacingVal").textContent=e.target.value;render();});
+$("#textColor").addEventListener("input",e=>{S.color=e.target.value;render();});
+$("#boxWidth").addEventListener("input",e=>{S.boxW=+e.target.value;$("#boxWidthVal").textContent=e.target.value+"%";render();});
+$("#writingSeg").querySelectorAll("button").forEach(b=>b.onclick=()=>{S.writing=b.dataset.mode;$$("#writingSeg button").forEach(x=>x.classList.remove("active"));b.classList.add("active");render();});
+
+/* ============ LAYOUT CONTROLS ============ */
+$("#padding").addEventListener("input",e=>{S.padding=+e.target.value;$("#paddingVal").textContent=e.target.value+"%";render();});
+$("#textBgSeg").querySelectorAll("button").forEach(b=>b.onclick=()=>{S.textBg=b.dataset.bg;$$("#textBgSeg button").forEach(x=>x.classList.remove("active"));b.classList.add("active");$("#dimOpts").style.display=(S.textBg==="dim")?"block":"none";render();});
+$("#textBgColor").addEventListener("input",e=>{S.textBgColor=e.target.value;render();});
+$("#textBgOpacity").addEventListener("input",e=>{S.textBgOpacity=+e.target.value;$("#textBgOpacityVal").textContent=e.target.value+"%";render();});
+$("#slotColor").addEventListener("input",e=>{S.slotColor=e.target.value;render();});
+$("#docBodyW").addEventListener("input",e=>{S.docBodyW=+e.target.value;$("#docBodyWVal").textContent=e.target.value+"%";render();});
+
+/* ============ BG / IMAGE CONTROLS ============ */
+$("#bgBright").addEventListener("input",e=>{S.bright=+e.target.value;$("#bgBrightVal").textContent=e.target.value+"%";render();});
+$("#bgBlur").addEventListener("input",e=>{S.blur=+e.target.value;$("#bgBlurVal").textContent=e.target.value;render();});
+$("#bgUploadBtn").onclick=()=>$("#bgUpload").click();
+$("#bgUpload").addEventListener("change",e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{S.bg={type:"image",value:r.result};$$("#bgSwatches .sw").forEach(x=>x.classList.remove("active"));render();};r.readAsDataURL(f);});
+$("#slotUploadBtn").onclick=()=>$("#slotUpload").click();
+$("#slotUpload").addEventListener("change",e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{S.slotImg=r.result;S.slotPosX=50;S.slotPosY=50;render();};r.readAsDataURL(f);});
+$("#slotClearBtn").onclick=()=>{S.slotImg=null;render();};
+
+/* 슬롯 이미지: 드래그해서 보여줄 부분 조절 (background-position) */
+(function bindSlotDrag(){
+  let drag=null;
+  const start=e=>{
+    if(!S.slotImg||S.mode!=="doc"||S.docLayout==="freeform")return;
+    e.preventDefault();
+    const p=e.touches?e.touches[0]:e;
+    drag={sx:p.clientX,sy:p.clientY,px:S.slotPosX,py:S.slotPosY,w:imgSlot.clientWidth,h:imgSlot.clientHeight};
+    const move=ev=>{
+      const q=ev.touches?ev.touches[0]:ev;
+      // 드래그한 만큼 위치 이동 (반대 방향: 위로 끌면 아래쪽이 보임 → 직관적으로 같은방향 채택)
+      const dx=(q.clientX-drag.sx)/drag.w*100;
+      const dy=(q.clientY-drag.sy)/drag.h*100;
+      S.slotPosX=Math.max(0,Math.min(100,drag.px - dx));
+      S.slotPosY=Math.max(0,Math.min(100,drag.py - dy));
+      imgSlot.style.backgroundPosition=`${S.slotPosX}% ${S.slotPosY}%`;
+      if(ev.cancelable)ev.preventDefault();
+    };
+    const up=()=>{document.removeEventListener("mousemove",move);document.removeEventListener("mouseup",up);document.removeEventListener("touchmove",move);document.removeEventListener("touchend",up);};
+    document.addEventListener("mousemove",move);document.addEventListener("mouseup",up);
+    document.addEventListener("touchmove",move,{passive:false});document.addEventListener("touchend",up);
+  };
+  imgSlot.addEventListener("mousedown",start);
+  imgSlot.addEventListener("touchstart",start,{passive:false});
+})();
+
+/* ============ SIZE CONTROLS ============ */
+$("#ratioChips").querySelectorAll(".chip").forEach(c=>c.onclick=()=>{S.ratioW=+c.dataset.w;S.ratioH=+c.dataset.h;$("#ratioW").value=S.ratioW;$("#ratioH").value=S.ratioH;$$("#ratioChips .chip").forEach(x=>x.classList.remove("active"));c.classList.add("active");layoutCanvas();});
+$("#ratioW").addEventListener("input",e=>{S.ratioW=+e.target.value||1;$$("#ratioChips .chip").forEach(x=>x.classList.remove("active"));layoutCanvas();});
+$("#ratioH").addEventListener("input",e=>{S.ratioH=+e.target.value||1;$$("#ratioChips .chip").forEach(x=>x.classList.remove("active"));layoutCanvas();});
+$("#scaleSel").addEventListener("change",e=>{S.exportW=+e.target.value;});
+$("#formatSeg").querySelectorAll("button").forEach(b=>b.onclick=()=>{S.format=b.dataset.fmt;$$("#formatSeg button").forEach(x=>x.classList.remove("active"));b.classList.add("active");});
+
+/* ============ STICKERS ============ */
+let selected=null,stickerId=0;
+function addSticker(opts){
+  const id="st"+(stickerId++);const el=document.createElement("div");el.className="sticker";el.dataset.id=id;
+  const isText=opts.type==="text";
+  const isImgBox=opts.type==="imgbox";
+  const baseW = isText?220:(isImgBox?160:(opts.type==="emoji"?64:90));
+  const baseH = isText?60:(isImgBox?120:baseW);
+  const st={id,el,x:canvas.clientWidth/2,y:canvas.clientHeight/2,scale:1,rot:0,base:baseW,baseH:baseH,...opts};
+  el.style.width=baseW+"px";el.style.height=baseH+"px";
+  if(opts.type==="emoji")el.innerHTML=`<div class="emoji" style="width:100%;height:100%;font-size:${baseW*0.8}px">${opts.content}</div>`;
+  else if(opts.type==="shape")el.innerHTML=`<div class="shape">${opts.content}</div>`;
+  else if(opts.type==="image")el.innerHTML=`<img src="${opts.content}">`;
+  else if(isImgBox){
+    st.boxColor=opts.boxColor||"#e8c84a"; st.img=opts.img||null;
+    el.innerHTML=`<div class="imgbox" style="width:100%;height:100%;background:${st.img?`url(${st.img}) center/cover`:st.boxColor}"></div>`;
+  }
+  else if(isText){
+    st.color=opts.color||"#2a2a2a"; st.fontSize=opts.fontSize||20; st.fontFamily=opts.fontFamily||S.font; st.elKey=opts.elKey||null;
+    const al=opts.textAlign||"center";
+    el.innerHTML=`<div class="txt" style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;text-align:${al};font-family:${st.fontFamily};font-size:${st.fontSize}px;color:${st.color};line-height:1.4;padding:4px;word-break:break-word;white-space:pre-wrap">${esc(opts.content||"텍스트")}</div>`;
+  }
+  el.innerHTML+=`<div class="handle del">✕</div><div class="handle scale">⤢</div><div class="handle rot">↻</div>`;
+  canvas.appendChild(el);S.stickers.push(st);bindSticker(st);applyTransform(st);selectSticker(st);
+  // elKey가 있는(=글 탭 연동) 텍스트는 직접 편집 안 함. 자유 메모 텍스트박스만 인라인 편집.
+  if(isText && !opts.elKey) bindTextEdit(st);
+  return st;
+}
+function bindTextEdit(st){
+  const txt=st.el.querySelector(".txt");
+  let editing=false;
+  const startEdit=()=>{
+    if(editing)return; editing=true;
+    selectSticker(st);
+    txt.setAttribute("contenteditable","true");
+    txt.style.outline="2px solid var(--accent)";
+    txt.style.cursor="text";
+    // 편집 중엔 드래그 막기
+    st.el.style.touchAction="auto";
+    txt.focus();
+    // 커서를 끝으로
+    const r=document.createRange();r.selectNodeContents(txt);r.collapse(false);
+    const sel=window.getSelection();sel.removeAllRanges();sel.addRange(r);
+  };
+  const endEdit=()=>{
+    if(!editing)return; editing=false;
+    txt.removeAttribute("contenteditable");
+    txt.style.outline="none";txt.style.cursor="";
+    st.el.style.touchAction="none";
+    st.content=txt.textContent;
+  };
+  st.el.addEventListener("dblclick",e=>{e.stopPropagation();startEdit();});
+  let lastTap=0;
+  st.el.addEventListener("touchend",e=>{
+    const now=Date.now();
+    if(now-lastTap<320 && !editing){e.preventDefault();startEdit();}
+    lastTap=now;
+  });
+  txt.addEventListener("blur",endEdit);
+  txt.addEventListener("keydown",e=>{ if(e.key==="Escape"){e.preventDefault();txt.blur();} });
+}
+function selectSticker(st){selected=st;$$(".sticker").forEach(x=>x.classList.remove("selected"));if(st)st.el.classList.add("selected");}
+function applyTransform(st){const bh=st.baseH||st.base;st.el.style.left=(st.x-st.base/2)+"px";st.el.style.top=(st.y-bh/2)+"px";st.el.style.transform=`scale(${st.scale}) rotate(${st.rot}deg)`;}
+function getPoint(e){const t=e.touches?e.touches[0]:e;const r=canvas.getBoundingClientRect();return{x:t.clientX-r.left,y:t.clientY-r.top};}
+function dist(a,b){return Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY);}
+function angle(a,b){return Math.atan2(b.clientY-a.clientY,b.clientX-a.clientX)*180/Math.PI;}
+function bindSticker(st){
+  const el=st.el;
+  const startDrag=e=>{
+    if(e.target.classList.contains("handle"))return;
+    selectSticker(st);
+    if(e.touches&&e.touches.length===2){startPinch(e);return;}
+    e.preventDefault();
+    const p=getPoint(e);const ox=p.x-st.x,oy=p.y-st.y;
+    const move=ev=>{if(ev.touches&&ev.touches.length===2)return;const q=getPoint(ev);st.x=q.x-ox;st.y=q.y-oy;applyTransform(st);};
+    const up=()=>{document.removeEventListener("mousemove",move);document.removeEventListener("mouseup",up);document.removeEventListener("touchmove",move);document.removeEventListener("touchend",up);};
+    document.addEventListener("mousemove",move);document.addEventListener("mouseup",up);
+    document.addEventListener("touchmove",move,{passive:false});document.addEventListener("touchend",up);
+  };
+  let pinchStart=null;
+  function startPinch(e){
+    selectSticker(st);
+    pinchStart={d:dist(e.touches[0],e.touches[1]),a:angle(e.touches[0],e.touches[1]),scale:st.scale,rot:st.rot};
+    const move=ev=>{if(!ev.touches||ev.touches.length<2)return;ev.preventDefault();
+      const nd=dist(ev.touches[0],ev.touches[1]),na=angle(ev.touches[0],ev.touches[1]);
+      st.scale=Math.max(.2,Math.min(8,pinchStart.scale*(nd/pinchStart.d)));st.rot=pinchStart.rot+(na-pinchStart.a);applyTransform(st);};
+    const up=()=>{document.removeEventListener("touchmove",move);document.removeEventListener("touchend",up);};
+    document.addEventListener("touchmove",move,{passive:false});document.addEventListener("touchend",up);
+  }
+  el.addEventListener("mousedown",startDrag);el.addEventListener("touchstart",startDrag,{passive:false});
+  el.querySelector(".del").addEventListener("click",ev=>{ev.stopPropagation();canvas.removeChild(el);S.stickers=S.stickers.filter(x=>x.id!==st.id);if(selected===st)selected=null;});
+  el.querySelector(".del").addEventListener("touchstart",ev=>{ev.stopPropagation();ev.preventDefault();canvas.removeChild(el);S.stickers=S.stickers.filter(x=>x.id!==st.id);if(selected===st)selected=null;},{passive:false});
+  bindHandle(el.querySelector(".scale"),p=>{const d=Math.hypot(p.x-st.x,p.y-st.y);st.scale=Math.max(.2,Math.min(8,(d/(st.base*0.7))));applyTransform(st);},st);
+  bindHandle(el.querySelector(".rot"),p=>{st.rot=Math.atan2(p.y-st.y,p.x-st.x)*180/Math.PI+45;applyTransform(st);},st);
+}
+function bindHandle(handle,onMove,st){
+  const start=e=>{e.preventDefault();e.stopPropagation();selectSticker(st);
+    const move=ev=>{ev.preventDefault();onMove(getPoint(ev));};
+    const up=()=>{document.removeEventListener("mousemove",move);document.removeEventListener("mouseup",up);document.removeEventListener("touchmove",move);document.removeEventListener("touchend",up);};
+    document.addEventListener("mousemove",move);document.addEventListener("mouseup",up);
+    document.addEventListener("touchmove",move,{passive:false});document.addEventListener("touchend",up);};
+  handle.addEventListener("mousedown",start);handle.addEventListener("touchstart",start,{passive:false});
+}
+canvas.addEventListener("mousedown",e=>{if(e.target===canvas||e.target===bgLayer||e.target===textLayer||e.target===textBox||e.target===docLayer||e.target===imgSlot){selectSticker(null);}});
+$("#imgUploadBtn").onclick=()=>$("#imgUpload").click();
+$("#imgUpload").addEventListener("change",e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>addSticker({type:"image",content:r.result});r.readAsDataURL(f);});
+$("#clearStickers").onclick=()=>{S.stickers.forEach(s=>s.el.remove());S.stickers=[];selected=null;};
+$("#addTextBox").onclick=()=>addSticker({type:"text",content:"텍스트",color:S.color,fontSize:20,fontFamily:S.font});
+
+/* ---- 자유배치 문서형 요소 추가 ---- */
+const FREE_DEFAULTS={
+  title:{content:"제목", mult:2.4, align:"left"},
+  sub:{content:"소제목을 작성합니다.", mult:0.85, align:"left"},
+  body:{content:"내용을 적습니다.", mult:1.0, align:"left"},
+  caption:{content:"페이지나 출처를 적습니다.", mult:0.78, align:"center"},
+};
+$("#freeAddBtns").querySelectorAll(".chip").forEach(c=>c.onclick=()=>{
+  const kind=c.dataset.add;
+  if(kind==="imgbox"){
+    addSticker({type:"imgbox",boxColor:S.slotColor});
+    return;
+  }
+  // 같은 요소가 이미 있으면 새로 만들지 않고 그걸 선택
+  const exist=S.stickers.find(s=>s.type==="text"&&s.elKey===kind);
+  if(exist){ selectSticker(exist); return; }
+  const contentMap={title:S.title, sub:S.sub, body:S.text, caption:S.caption};
+  const e=S.el[kind];
+  const sz=Math.round(S.size*(e?e.scale:1));
+  const st=addSticker({type:"text",content:contentMap[kind]||"",color:(e&&e.color)||S.color,fontSize:sz,fontFamily:S.font,textAlign:(e&&e.align==="justify")?"left":(e&&e.align)||"left",elKey:kind});
+  // 본문은 넓게, 제목/소제목은 가로로 여유있게
+  if(kind==="body"){ st.base=300; st.baseH=200; st.el.style.width="300px"; st.el.style.height="200px"; }
+  else if(kind==="title"){ st.base=240; st.baseH=70; st.el.style.width="240px"; st.el.style.height="70px"; }
+  applyTransform(st);
+  render(); // 글 탭 내용/스타일 즉시 동기화
+});
+function currentImgBox(){
+  if(selected&&selected.type==="imgbox")return selected;
+  const boxes=S.stickers.filter(s=>s.type==="imgbox");
+  if(boxes.length===1){selectSticker(boxes[0]);return boxes[0];}
+  return null;
+}
+$("#boxImgBtn").onclick=()=>{ const b=currentImgBox(); if(b)$("#boxImgUpload").click(); else alert("먼저 캔버스에서 이미지 박스를 탭해 선택하세요. (없으면 ＋이미지 박스로 추가)"); };
+$("#boxImgUpload").addEventListener("change",e=>{
+  const f=e.target.files[0];if(!f)return;
+  const b=currentImgBox(); if(!b)return;
+  const r=new FileReader();r.onload=()=>{b.img=r.result;b.el.querySelector(".imgbox").style.background=`url(${r.result}) center/cover`;};r.readAsDataURL(f);
+});
+$("#boxColor").addEventListener("input",e=>{
+  const b=currentImgBox(); if(!b)return;
+  b.boxColor=e.target.value;b.img=null;b.el.querySelector(".imgbox").style.background=e.target.value;
+});
+
+/* ============ CANVAS SIZE ============ */
+// 미리보기는 화면에 맞추되 상한을 둬서 과하게 커지거나 작아지지 않게 한다.
+// 실제 저장 픽셀은 별도(EXPORT_BASE)로 고정 → 창 크기와 무관하게 항상 같은 고화질.
+const PREVIEW_MAX_W=560, PREVIEW_MAX_H=720, PREVIEW_MIN_W=240;
+function layoutCanvas(){
+  const wrap=stageWrap.getBoundingClientRect();
+  const availW=Math.max(PREVIEW_MIN_W, wrap.width-36);
+  const availH=wrap.height-36;
+  const ratio=S.ratioW/S.ratioH;
+  // 가용 공간 안에 맞추기
+  let w=availW, h=w/ratio;
+  if(h>availH){h=availH;w=h*ratio;}
+  // 상한 적용
+  if(w>PREVIEW_MAX_W){w=PREVIEW_MAX_W;h=w/ratio;}
+  if(h>PREVIEW_MAX_H){h=PREVIEW_MAX_H;w=h*ratio;}
+  // 너무 작아지지 않게 (가용 공간이 허락하는 한)
+  if(w<PREVIEW_MIN_W && availW>=PREVIEW_MIN_W){w=PREVIEW_MIN_W;h=w/ratio;}
+  canvas.style.width=Math.round(w)+"px";canvas.style.height=Math.round(h)+"px";
+  render();
+}
+window.addEventListener("resize",layoutCanvas);
+
+/* ============ RENDER ============ */
+const BASE_W=480; // 이 폭에서 슬라이더 px값이 그대로 적용. 캔버스가 커지면 비례 확대.
+function fs(px){ return (px*(canvas.clientWidth/BASE_W)).toFixed(2)+"px"; } // 폭 비례 폰트크기
+function esc(s){return (s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");}
+function render(){
+  // background
+  if(S.bg.type==="image"){bgLayer.style.background=`url(${S.bg.value}) center/cover`;}
+  else bgLayer.style.background=S.bg.value;
+  bgLayer.style.filter=`brightness(${S.bright}%) blur(${S.blur}px)`;
+  bgLayer.style.transform=S.blur>0?"scale(1.06)":"none";
+  drawTexture();
+
+  if(S.mode==="doc"){
+    textLayer.style.display="none";
+    if(S.docLayout==="freeform"){ docLayer.style.display="none"; imgSlot.style.display="none"; syncFreeformText(); }
+    else renderDoc();
+  }
+  else { docLayer.style.display="none"; imgSlot.style.display="none"; renderFree(); }
+}
+// 자유배치 텍스트박스: 글 탭의 내용/스타일을 실시간 반영 (elKey가 있는 텍스트 스티커)
+function syncFreeformText(){
+  const content={title:S.title, sub:S.sub, body:S.text, caption:S.caption};
+  S.stickers.forEach(st=>{
+    if(st.type!=="text"||!st.elKey)return;
+    const k=st.elKey, e=S.el[k];
+    const txt=st.el.querySelector(".txt");
+    if(!txt)return;
+    let v=content[k]||"";
+    txt.textContent=v;
+    // 스타일도 글 탭 + 요소별 설정 따름
+    const px=Math.round(S.size*(e?e.scale:1));
+    txt.style.fontFamily=S.font;
+    txt.style.fontSize=px+"px";
+    txt.style.color=(e&&e.color)||S.color;
+    txt.style.letterSpacing=((e&&e.ls)||0)+"px";
+    txt.style.textAlign=(e&&e.align==="justify")?"left":((e&&e.align)||"left");
+    txt.style.lineHeight=S.lh;
+    txt.style.whiteSpace="pre-wrap";
+    // 본문은 위→아래로 흐르게 상단 정렬, 짧은 요소는 가운데
+    txt.style.alignItems=(k==="body")?"flex-start":"center";
+    txt.style.justifyContent=(k==="body")?"flex-start":"center";
+    st.fontSize=px;
+  });
+}
+function renderFree(){
+  textLayer.style.display="flex";
+  const lay=LAYOUTS.find(l=>l.id===S.layout);
+  textLayer.style.justifyContent=lay.justify;textLayer.style.alignItems=lay.align;textLayer.style.padding=S.padding+"%";
+  textBox.textContent=S.text;
+  textBox.style.fontFamily=S.font;textBox.style.fontSize=fs(S.size);textBox.style.lineHeight=S.lh;
+  textBox.style.letterSpacing=fs(S.ls);textBox.style.color=S.color;textBox.style.textAlign=S.align;
+  textBox.style.width=S.writing==="vertical"?"auto":S.boxW+"%";textBox.style.maxWidth=S.boxW+"%";
+  textBox.style.writingMode=S.writing==="vertical"?"vertical-rl":"horizontal-tb";
+  textBox.style.maxHeight=S.writing==="vertical"?"100%":"none";
+  if(S.textBg==="card"){Object.assign(textBox.style,{background:"rgba(255,255,255,.92)",padding:"6%",borderRadius:"4px",boxShadow:"0 8px 30px rgba(0,0,0,.18)"});}
+  else if(S.textBg==="dim"){Object.assign(textBox.style,{background:hexToRgba(S.textBgColor,S.textBgOpacity/100),padding:"5%",borderRadius:"6px",boxShadow:"none"});}
+  else {Object.assign(textBox.style,{background:"none",padding:"0",boxShadow:"none"});}
+}
+function hexToRgba(hex,a){
+  const h=hex.replace("#","");
+  const r=parseInt(h.substring(0,2),16),g=parseInt(h.substring(2,4),16),b=parseInt(h.substring(4,6),16);
+  return `rgba(${r},${g},${b},${a})`;
+}
+function renderDoc(){
+  docLayer.style.display="flex";
+  const L=S.docLayout;
+  const E=S.el;
+  const titleSize=fs(S.size*E.title.scale), subSize=fs(S.size*E.sub.scale), capSize=fs(S.size*E.caption.scale), bodySize=fs(S.size*E.body.scale);
+  // image slot
+  const slot=DOC_LAYOUTS.find(d=>d.id===L).img;
+  imgSlot.style.display="block";
+  imgSlot.style.top=slot.top+"%";imgSlot.style.left=slot.left+"%";
+  imgSlot.style.width=slot.w+"%";imgSlot.style.height=slot.h+"%";
+  if(S.slotImg){
+    imgSlot.style.background=`url(${S.slotImg})`;
+    imgSlot.style.backgroundSize="cover";
+    imgSlot.style.backgroundPosition=`${S.slotPosX}% ${S.slotPosY}%`;
+    imgSlot.style.cursor="move";
+  }else{
+    imgSlot.style.background=S.slotColor;
+    imgSlot.style.cursor="default";
+  }
+  imgSlot.style.zIndex="1";
+
+  const col=k=>S.el[k].color||S.color;
+  const els=k=>fs(S.el[k].ls||0);
+  const headerHTML=`
+    <h1 class="doc-title" style="font-family:${S.font};font-size:${titleSize};color:${col('title')};letter-spacing:${els('title')};text-align:${E.title.align}">${esc(S.title)}</h1>
+    <p class="doc-sub" style="font-family:${S.font};font-size:${subSize};color:${col('sub')};letter-spacing:${els('sub')};margin-top:.3em;text-align:${E.sub.align}">${esc(S.sub)}</p>`;
+  const captionHTML=`<p class="doc-caption" style="font-family:${S.font};font-size:${capSize};color:${col('caption')};letter-spacing:${els('caption')};text-align:${E.caption.align}">${esc(S.caption)}</p>`;
+  const bodyStyle=`font-family:${S.font};font-size:${bodySize};line-height:${S.lh};letter-spacing:${els('body')};color:${col('body')};text-align:${E.body.align};width:${S.docBodyW}%;`;
+  // header alignment wrapper (uses title align to anchor block)
+  const headWrapAlign = E.title.align==="left"?"flex-start":E.title.align==="center"?"center":"flex-end";
+
+  let html="";
+  if(L==="banner"){
+    docLayer.style.flexDirection="column";docLayer.style.padding="0";
+    html=`
+      <div style="height:30%;display:flex;flex-direction:column;justify-content:flex-end;align-items:${headWrapAlign};padding:0 6% 4%;box-sizing:border-box">${headerHTML}</div>
+      <div style="flex:1;padding:4% 6% 2%;box-sizing:border-box;overflow:hidden;display:flex;flex-direction:column">
+        <div class="doc-body" style="${bodyStyle};flex:1">${esc(S.text)}</div>${captionHTML}
+      </div>`;
+  } else if(L==="bottomBanner"){
+    docLayer.style.flexDirection="column";docLayer.style.padding="0";
+    html=`
+      <div style="flex:1;padding:7% 6% 3%;box-sizing:border-box;overflow:hidden;display:flex;flex-direction:column">
+        <div style="display:flex;flex-direction:column;align-items:${headWrapAlign};margin-bottom:5%">${headerHTML}</div>
+        <div class="doc-body" style="${bodyStyle};flex:1">${esc(S.text)}</div>${captionHTML}
+      </div>
+      <div style="height:30%"></div>`;
+  } else if(L==="sidebar"||L==="sidebarR"){
+    docLayer.style.flexDirection="row";docLayer.style.padding="0";
+    const spacer=`<div style="width:26%;flex:0 0 26%"></div>`;
+    const content=`
+      <div style="flex:1;padding:7% 6% 4%;box-sizing:border-box;display:flex;flex-direction:column;overflow:hidden">
+        <div style="display:flex;flex-direction:column;align-items:${headWrapAlign};margin-bottom:6%">${headerHTML}</div>
+        <div class="doc-body" style="${bodyStyle};flex:1">${esc(S.text)}</div>${captionHTML}
+      </div>`;
+    html = L==="sidebar" ? spacer+content : content+spacer;
+  } else if(L==="bodybox"){
+    docLayer.style.flexDirection="column";docLayer.style.padding="0";
+    html=`
+      <div style="padding:6% 6% 0;box-sizing:border-box;display:flex;flex-direction:column;align-items:${headWrapAlign}">${headerHTML}</div>
+      <div style="flex:1;padding:3% 6% 4%;box-sizing:border-box;display:flex;flex-direction:column;overflow:hidden;position:relative;z-index:2">
+        <div class="doc-body" style="${bodyStyle};flex:1;padding:5% 4%;box-sizing:border-box">${esc(S.text)}</div>${captionHTML}
+      </div>`;
+  }
+  docLayer.innerHTML=html;
+  docLayer.style.position="absolute";docLayer.style.zIndex="2";
+}
+function drawTexture(){
+  const w=canvas.clientWidth,h=canvas.clientHeight;
+  if(S.bg.type!=="lined"&&S.bg.type!=="paper"){lineCanvas.style.display="none";return;}
+  lineCanvas.style.display="block";lineCanvas.width=w;lineCanvas.height=h;
+  const ctx=lineCanvas.getContext("2d");ctx.clearRect(0,0,w,h);
+  if(S.bg.type==="lined"){
+    ctx.strokeStyle="rgba(90,110,150,.30)";ctx.lineWidth=1;
+    const gap=Math.max(28,S.size*1.6);
+    for(let y=gap;y<h;y+=gap){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(w,y);ctx.stroke();}
+    ctx.strokeStyle="rgba(210,90,90,.45)";ctx.beginPath();ctx.moveTo(w*0.12,0);ctx.lineTo(w*0.12,h);ctx.stroke();
+  } else {
+    for(let i=0;i<w*h/900;i++){ctx.fillStyle=`rgba(120,100,70,${Math.random()*0.05})`;ctx.fillRect(Math.random()*w,Math.random()*h,1.4,1.4);}
+  }
+}
+
+/* ============ DOWNLOAD ============ */
+$("#downloadBtn").addEventListener("click",async()=>{
+  selectSticker(null);
+  const btn=$("#downloadBtn");const old=btn.textContent;btn.textContent="저장 중…";btn.disabled=true;
+  try{
+    // 미리보기가 작든 크든 항상 같은 출력폭(S.exportW)이 나오도록 scale을 역산
+    const previewW=canvas.clientWidth||1;
+    const scale=Math.max(1, S.exportW/previewW);
+    const isJpg=S.format==="jpg";
+    const out=await html2canvas(canvas,{
+      scale, useCORS:true, logging:false,
+      backgroundColor: isJpg?"#ffffff":null   // JPG는 투명도 없음 → 흰 배경
+    });
+    const link=document.createElement("a");
+    if(isJpg){
+      link.download=`글담_${Date.now()}.jpg`;
+      link.href=out.toDataURL("image/jpeg",1.0);  // 품질 최대
+    }else{
+      link.download=`글담_${Date.now()}.png`;
+      link.href=out.toDataURL("image/png");
+    }
+    link.click();
+  }catch(err){alert("저장 중 문제가 발생했어요: "+err.message);}
+  btn.textContent=old;btn.disabled=false;
+});
+
+/* ============ BOOT ============ */
+buildBgSwatches();buildLayouts();buildDocLayouts();buildEmojis();buildShapes();buildElementControls();
+S.text=$("#textInput").value;
+requestAnimationFrame(()=>{layoutCanvas();render();});
+</script>
+</body>
+</html>
